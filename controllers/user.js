@@ -5,25 +5,21 @@ const bryptsjs = require('bcryptjs');
 const Usuario = require('../models/usuario.js');
 
 
-const userGet = (req = request, res = response) => {
+const userGet = async  (req = request, res = response) => {
 
-    const { 
-        q, 
-        nombre = "no name", 
-        apikey, 
-        page = 1, 
-        limit = 10 
-    } = req.query;
+    const { limite = 5, desde= 0 } = req.query;
+    const query= {estado:true};
 
 
-    res.status(200).json({
-        msg: 'get Api - controlador',
-        q,
-        nombre,
-        apikey,
-        page,
-        limit,
-    });
+   const [usuarios, total]= await Promise.all([
+        Usuario.find(query).skip(Number(desde)).limit(Number(limite)),
+        Usuario.countDocuments(query),
+   ])
+
+   return res.status(200).json({
+    usuarios,
+    total
+   });
 }
 
 const userPost = async  (req, res = response) => {
@@ -42,14 +38,6 @@ const userPost = async  (req, res = response) => {
         nombre, correo, password, rol, imagen
     });
 
-
-    // verficar si el correo existe
-    const existeEmail = await Usuario.findOne({correo});
-    if(existeEmail) return res.status(400).json({
-        msg: 'Este correo ya esta registrado',
-    });
-
-
     // encriptar la contraseña 
     const salt = bryptsjs.genSaltSync(10);
     usuario.password = bryptsjs.hashSync(password, salt);
@@ -57,33 +45,44 @@ const userPost = async  (req, res = response) => {
     //guardar en la base de datos
     await usuario.save();
 
-    res.status(201).json({
+    return res.status(201).json({
         msg: 'post Api - controlador',
         usuario,
     });
 }
 
 
-const userPut = (req, res = response) => {
+const userPut = async (req, res = response) => {
 
     const { id } = req.params;
 
+    const {password, google, correo, _id,  ...resto} = req.body;
 
-    res.status(201).json({
-        msg: 'put Api - controlador',
-        id,
-    });
+
+
+    if(password){
+        // encriptar la contraseña 
+        const salt = bryptsjs.genSaltSync(10);
+        resto.password = bryptsjs.hashSync(password, salt);
+    }
+
+        const usuario = await Usuario.findByIdAndUpdate(id, resto);
+
+
+    return res.status(201).json(usuario);
 }
 
-const userPatch = (req, res = response) => {
-    res.status(200).json({
-        msg: 'patch Api - controlador'
-    });
-}
 
-const userDelete = (req, res = response) => {
-    res.status(201).json({
-        msg: 'delete Api - controlador'
+const userDelete = async (req, res = response) => {
+
+    const { id } = req.params;
+
+    // const usuario  = await Usuario.findByIdAndDelete(id);
+    const usuario = await Usuario.findByIdAndUpdate(id, {estado:false});
+
+
+    return res.status(201).json({
+        usuario,
     });
 }
 
@@ -91,6 +90,5 @@ module.exports = {
     userGet,
     userPost,
     userPut,
-    userPatch,
     userDelete,
 }
